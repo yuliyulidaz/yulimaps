@@ -255,15 +255,49 @@
           }
         }, [locationName, rating, reviewCount, description, distValue, distUnit, isVerified, isDarkMode, aspectRatio, isLoaded]);
 
-        const handleImageUpload = (e) => {
-          if (e.target.files && e.target.files[0]) {
+        // Image compression utility for iOS
+        const compressImage = (file) => {
+          return new Promise((resolve) => {
             const reader = new FileReader();
+            reader.readAsDataURL(file);
             reader.onload = (event) => {
-              setImage(event.target?.result);
-              setImgScale(1.0);
-              setImgPos({ x: 0, y: 0 });
+              const img = new Image();
+              img.src = event.target.result;
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1920;
+                const MAX_HEIGHT = 1920;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                  if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                  }
+                } else {
+                  if (height > MAX_HEIGHT) {
+                    width *= MAX_HEIGHT / height;
+                    height = MAX_HEIGHT;
+                  }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.9));
+              };
             };
-            reader.readAsDataURL(e.target.files[0]);
+          });
+        };
+
+        const handleImageUpload = async (e) => {
+          if (e.target.files && e.target.files[0]) {
+            const resizedImage = await compressImage(e.target.files[0]);
+            setImage(resizedImage);
+            setImgScale(1.0);
+            setImgPos({ x: 0, y: 0 });
           }
         };
 
@@ -352,7 +386,7 @@
             if (!previewRef.current || !image) return null;
 
             await document.fonts.ready;
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay for iOS
 
             const rect = previewRef.current.getBoundingClientRect();
             // Round inputs to avoid sub-pixel gaps
@@ -373,16 +407,31 @@
                    display: 'block'
                  },
                  cacheBust: true,
+                 skipAutoScale: true, // Fix for iOS white line/box
+                 useCORS: true,
                  filter: (node) => {
                    return !node.classList?.contains('floating-controls') && !node.classList?.contains('no-print');
                  },
             };
 
-            if (format === 'blob') {
-                return await toBlob(previewRef.current, options);
-            } else {
-                return await toPng(previewRef.current, options);
+            // Attempt retry logic for robust iOS capture
+            let result = null;
+            try {
+               if (format === 'blob') {
+                  result = await toBlob(previewRef.current, options);
+               } else {
+                  result = await toPng(previewRef.current, options);
+               }
+            } catch (firstErr) {
+               console.warn("First capture attempt failed, retrying...", firstErr);
+               await new Promise(resolve => setTimeout(resolve, 500));
+               if (format === 'blob') {
+                  result = await toBlob(previewRef.current, options);
+               } else {
+                  result = await toPng(previewRef.current, options);
+               }
             }
+            return result;
         }
 
         const handleDownload = async () => {
@@ -410,7 +459,7 @@
             } catch (err) {
               console.error(err);
               if (isIOS) {
-                  alert('이미지 생성 완료! 사진을 길게 눌러 저장하세요.');
+                  alert('이미지 생성에 실패했습니다. 사진 용량을 줄여서 다시 시도해보세요.');
               } else {
                   alert('저장에 실패했습니다. 다시 시도해주세요.');
               }
@@ -695,7 +744,7 @@
                          </div>
                        </div>
 
-                       <div className="absolute bottom-[29%] left-5 z-20 pointer-events-none">
+                       <div className="absolute bottom-[32%] left-5 z-20 pointer-events-none">
                          <Icons.GoogleLogo />
                        </div>
 
