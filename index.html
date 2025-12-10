@@ -38,6 +38,15 @@
       .animate-fade-in {
         animation: fadeIn 0.3s ease-out forwards;
       }
+      
+      /* Toggle Switch CSS */
+      .toggle-checkbox:checked {
+        right: 0;
+        border-color: #2563eb;
+      }
+      .toggle-checkbox:checked + .toggle-label {
+        background-color: #2563eb;
+      }
     </style>
 
     <!-- Import Map for React modules -->
@@ -60,7 +69,7 @@
       import { createRoot } from 'react-dom/client';
       import { toPng } from 'html-to-image';
 
-      // --- Icons (Clean, No Shadows, Flat) ---
+      // --- Icons ---
       const Icons = {
         Back: () => (
           <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white">
@@ -77,18 +86,18 @@
             <path d="M0 0h24v24H0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
           </svg>
         ),
-        Share: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1f1f1f">
+        Share: ({ color = "#1f1f1f" }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill={color}>
             <path d="M0 0h24v24H0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
           </svg>
         ),
-        Bookmark: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="#1f1f1f">
+        Bookmark: ({ color = "#1f1f1f" }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill={color}>
             <path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/>
           </svg>
         ),
-        Close: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="none" stroke="#1f1f1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        Close: ({ color = "#1f1f1f" }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M6 18L18 6M6 6l12 12" />
           </svg>
         ),
@@ -97,8 +106,8 @@
             <path d="M0 0h24v24H0z" fill="none"/><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
           </svg>
         ),
-        StarEmpty: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="14" viewBox="0 0 24 24" width="14" fill="#E0E0E0">
+        StarEmpty: ({ color = "#E0E0E0" }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="14" viewBox="0 0 24 24" width="14" fill={color}>
             <path d="M0 0h24v24H0z" fill="none"/><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
           </svg>
         ),
@@ -107,18 +116,18 @@
             <path d="M0 0h24v24H0z" fill="none"/><path d="M21.71 11.29l-9-9c-.39-.39-1.02-.39-1.41 0l-9 9c-.39.39-.39 1.02 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9c.39-.38.39-1.01 0-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/>
           </svg>
         ),
-        Navigation: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1a73e8">
+        Navigation: ({ color = "#1a73e8" }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill={color}>
             <path d="M0 0h24v24H0z" fill="none"/><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
           </svg>
         ),
-        Save: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1a73e8">
-            <path d="M0 0h24v24H0z" fill="none"/><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z" fill="none" stroke="#1a73e8" strokeWidth="2"/>
+        Save: ({ color = "#1a73e8", stroke = "#1a73e8" }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="none">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z" stroke={stroke} strokeWidth="2"/>
           </svg>
         ),
-        Flag: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1a73e8">
+        Flag: ({ color = "#1a73e8" }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill={color}>
              <path d="M0 0h24v24H0z" fill="none"/><path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/>
           </svg>
         ),
@@ -137,6 +146,21 @@
             <path d="M0 0h24v24H0z" fill="none"/><path d="M19 13H5v-2h14v2z"/>
           </svg>
         ),
+        BlueCheck: () => (
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z" fill="#1DA1F2"/>
+           </svg>
+        ),
+        Moon: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="currentColor">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M10 2c-1.82 0-3.53.5-5 1.35C7.99 5.08 10 8.3 10 12s-2.01 6.92-5 8.65C6.47 21.5 8.18 22 10 22c5.52 0 10-4.48 10-10S15.52 2 10 2z"/>
+          </svg>
+        ),
+        Sun: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="currentColor">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
+          </svg>
+        )
       };
 
       // --- Modern Input Component ---
@@ -164,17 +188,24 @@
       ];
 
       const App = () => {
+        // --- State Management ---
+        const [isLoaded, setIsLoaded] = useState(false);
         const [image, setImage] = useState(null);
         const [imgScale, setImgScale] = useState(1.0);
         const [imgPos, setImgPos] = useState({ x: 0, y: 0 });
+        
+        // Form Data
         const [locationName, setLocationName] = useState('');
         const [rating, setRating] = useState('0.0');
         const [reviewCount, setReviewCount] = useState('');
         const [description, setDescription] = useState('');
-        
-        // New Distance State
         const [distValue, setDistValue] = useState('');
         const [distUnit, setDistUnit] = useState('km');
+        
+        // New Features State
+        const [isVerified, setIsVerified] = useState(false);
+        const [isDarkMode, setIsDarkMode] = useState(false);
+        const [aspectRatio, setAspectRatio] = useState('9/16'); // '9/16', '4/5', '1/1'
 
         const [isDownloading, setIsDownloading] = useState(false);
         const [isDragging, setIsDragging] = useState(false);
@@ -185,6 +216,43 @@
         
         const previewRef = useRef(null);
         const imgContainerRef = useRef(null);
+
+        // --- Local Storage Logic ---
+        useEffect(() => {
+          // Load data from localStorage on mount
+          const loadData = () => {
+            try {
+              const savedData = localStorage.getItem('googleMapsCardData');
+              if (savedData) {
+                const parsed = JSON.parse(savedData);
+                if (parsed.locationName) setLocationName(parsed.locationName);
+                if (parsed.rating) setRating(parsed.rating);
+                if (parsed.reviewCount) setReviewCount(parsed.reviewCount);
+                if (parsed.description) setDescription(parsed.description);
+                if (parsed.distValue) setDistValue(parsed.distValue);
+                if (parsed.distUnit) setDistUnit(parsed.distUnit);
+                if (parsed.isVerified !== undefined) setIsVerified(parsed.isVerified);
+                if (parsed.isDarkMode !== undefined) setIsDarkMode(parsed.isDarkMode);
+                if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio);
+              }
+            } catch (e) {
+              console.error("Failed to load local storage", e);
+            }
+            setIsLoaded(true);
+          };
+          loadData();
+        }, []);
+
+        useEffect(() => {
+          // Save data to localStorage on change
+          if (isLoaded) {
+            const dataToSave = {
+              locationName, rating, reviewCount, description, 
+              distValue, distUnit, isVerified, isDarkMode, aspectRatio
+            };
+            localStorage.setItem('googleMapsCardData', JSON.stringify(dataToSave));
+          }
+        }, [locationName, rating, reviewCount, description, distValue, distUnit, isVerified, isDarkMode, aspectRatio, isLoaded]);
 
         const handleImageUpload = (e) => {
           if (e.target.files && e.target.files[0]) {
@@ -220,7 +288,7 @@
           }
         };
 
-        // --- Pinch-to-Zoom Logic (Touch Events) ---
+        // --- Pinch-to-Zoom Logic ---
         const handleTouchStart = (e) => {
           if (e.touches.length === 2) {
             const dist = Math.hypot(
@@ -324,6 +392,21 @@
             }
           }
         };
+        
+        // Colors based on Dark Mode
+        const theme = {
+           bg: isDarkMode ? '#202124' : '#ffffff',
+           textPrimary: isDarkMode ? '#e8eaed' : '#202124',
+           textSecondary: isDarkMode ? '#9aa0a6' : '#70757a',
+           iconColor: isDarkMode ? '#e8eaed' : '#1f1f1f',
+           buttonBg: isDarkMode ? '#303134' : '#ffffff',
+           buttonBorder: isDarkMode ? '#3c4043' : '#dadce0',
+           buttonText: isDarkMode ? '#8ab4f8' : '#1a73e8',
+           saveIconStroke: isDarkMode ? '#8ab4f8' : '#1a73e8',
+           navFill: isDarkMode ? '#8ab4f8' : '#1a73e8',
+           flagFill: isDarkMode ? '#8ab4f8' : '#1a73e8',
+           starEmpty: isDarkMode ? '#5f6368' : '#E0E0E0'
+        };
 
         return (
           <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
@@ -355,12 +438,55 @@
               </div>
 
               <div className="bg-white p-5 rounded-[24px] shadow-sm border border-gray-100 space-y-5">
-                   <InputField 
-                     label="장소 이름" 
-                     value={locationName} 
-                     onChange={(e) => setLocationName(e.target.value)} 
-                     placeholder=""
-                   />
+                   {/* Style Settings Group */}
+                   <div className="flex flex-col gap-3 pb-3 border-b border-gray-100">
+                     <label className="text-xs font-semibold text-gray-500 ml-1">카드 스타일 설정</label>
+                     <div className="flex gap-2">
+                        {/* Dark Mode Toggle */}
+                        <button 
+                          onClick={() => setIsDarkMode(!isDarkMode)}
+                          className={`flex-1 h-10 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                          {isDarkMode ? <Icons.Moon /> : <Icons.Sun />}
+                          {isDarkMode ? '다크 모드' : '라이트 모드'}
+                        </button>
+                     </div>
+                     
+                     <div className="flex bg-gray-100 rounded-lg p-1">
+                        {[
+                          { val: '9/16', label: '스토리' },
+                          { val: '4/5', label: '피드' },
+                          { val: '1/1', label: '정사각형' }
+                        ].map((opt) => (
+                           <button
+                             key={opt.val}
+                             onClick={() => setAspectRatio(opt.val)}
+                             className={`flex-1 h-8 rounded-md text-xs font-bold transition-all ${aspectRatio === opt.val ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                           >
+                             {opt.label}
+                           </button>
+                        ))}
+                     </div>
+                   </div>
+
+                   <div className="flex flex-col gap-1.5">
+                     <label className="text-xs font-semibold text-gray-500 ml-1">장소 이름 & 인증</label>
+                     <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={locationName}
+                          onChange={(e) => setLocationName(e.target.value)}
+                          placeholder="예: 우리집"
+                          className="flex-1 h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-gray-900 placeholder-gray-400"
+                        />
+                        <button 
+                          onClick={() => setIsVerified(!isVerified)}
+                          className={`w-12 h-12 rounded-xl border flex items-center justify-center transition-all ${isVerified ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200 grayscale opacity-60'}`}
+                        >
+                           <Icons.BlueCheck />
+                        </button>
+                     </div>
+                   </div>
                    
                    <div>
                      <style>{`
@@ -460,11 +586,12 @@
                  <div className="w-full bg-gray-200 rounded-[28px] p-2 border border-gray-300">
                    <div 
                      ref={previewRef}
-                     className="relative bg-white overflow-hidden shadow-2xl mx-auto rounded-[24px]"
+                     className="relative overflow-hidden shadow-2xl mx-auto rounded-[24px] transition-colors duration-300"
                      style={{
                        width: '100%',
-                       aspectRatio: '9/16',
-                       maxWidth: '400px'
+                       aspectRatio: aspectRatio,
+                       maxWidth: '400px',
+                       backgroundColor: theme.bg
                      }}
                    >
                        {!image ? (
@@ -474,14 +601,14 @@
                        ) : (
                          <div 
                             ref={imgContainerRef}
-                            className="absolute inset-0 overflow-hidden bg-white cursor-move touch-none"
+                            className="absolute inset-0 overflow-hidden cursor-move touch-none"
+                            style={{ backgroundColor: theme.bg, touchAction: 'none' }}
                             onPointerDown={handlePointerDown}
                             onPointerMove={handlePointerMove}
                             onPointerUp={handlePointerUp}
                             onPointerLeave={handlePointerUp}
                             onTouchStart={handleTouchStart}
                             onTouchMove={handleTouchMove}
-                            style={{ touchAction: 'none' }}
                          >
                             <img 
                               src={image} 
@@ -537,60 +664,85 @@
                        </div>
 
                        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-auto">
-                         <div className="bg-white w-full rounded-t-[20px] pb-8 pt-2 shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
+                         <div 
+                           className="w-full rounded-t-[20px] pb-8 pt-2 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] transition-colors duration-300"
+                           style={{ backgroundColor: theme.bg }}
+                         >
                            <div className="w-full flex justify-center pt-2 pb-1">
-                             <div className="w-8 h-1 bg-gray-300 rounded-full"></div>
+                             <div className="w-8 h-1 bg-gray-300 rounded-full opacity-50"></div>
                            </div>
 
                            <div className="px-5">
                              <div className="flex justify-between items-start mt-2">
-                               <h2 className="text-[22px] font-bold text-[#202124] leading-tight max-w-[70%] break-words">
-                                 {locationName || '장소 이름'}
-                               </h2>
-                               <div className="flex gap-4 text-[#5f6368] pr-1">
-                                  <Icons.Bookmark />
-                                  <Icons.Share />
-                                  <Icons.Close />
+                               <div className="flex items-center gap-1.5 max-w-[70%]">
+                                 <h2 
+                                   className="text-[22px] font-bold leading-tight break-words"
+                                   style={{ color: theme.textPrimary }}
+                                 >
+                                   {locationName || '장소 이름'}
+                                 </h2>
+                                 {isVerified && (
+                                   <div className="min-w-[18px]">
+                                     <Icons.BlueCheck />
+                                   </div>
+                                 )}
+                               </div>
+                               <div className="flex gap-4 pr-1">
+                                  <Icons.Bookmark color={theme.iconColor} />
+                                  <Icons.Share color={theme.iconColor} />
+                                  <Icons.Close color={theme.iconColor} />
                                </div>
                              </div>
 
                              <div className="flex items-center gap-1 mt-2">
-                               <span className="text-sm font-medium text-[#202124]">{rating}</span>
+                               <span className="text-sm font-medium" style={{ color: theme.textPrimary }}>{rating}</span>
                                <div className="flex items-center gap-[1px]">
                                  {[1, 2, 3, 4, 5].map((star) => (
                                    <span key={star}>
-                                     {parseFloat(rating) >= star ? <Icons.StarFull /> : <Icons.StarEmpty />}
+                                     {parseFloat(rating) >= star ? <Icons.StarFull /> : <Icons.StarEmpty color={theme.starEmpty} />}
                                    </span>
                                  ))}
                                </div>
-                               <span className="text-sm text-[#70757a] ml-1">
+                               <span className="text-sm ml-1" style={{ color: theme.textSecondary }}>
                                  ({reviewCount ? reviewCount : '0'})
                                </span>
                              </div>
 
-                             <div className="mt-1 text-sm text-[#70757a]">
+                             <div className="mt-1 text-sm" style={{ color: theme.textSecondary }}>
                                {description || '장소 설명 또는 주소'}
                              </div>
 
-                             <div className="mt-1 text-sm text-[#70757a]">
+                             <div className="mt-1 text-sm" style={{ color: theme.textSecondary }}>
                                {distValue ? `${distValue} ${distUnit}` : '거리 정보'}
                              </div>
 
                              <div className="flex gap-3 mt-4 overflow-x-auto no-scrollbar pb-1">
-                               <button className="flex items-center gap-1.5 bg-[#1a73e8] text-white px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap shadow-sm">
+                               <button 
+                                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap shadow-sm border border-transparent"
+                                 style={{ backgroundColor: theme.navFill, color: '#fff' }}
+                               >
                                  <Icons.Direction />
                                  경로
                                </button>
-                               <button className="flex items-center gap-1.5 bg-white border border-[#dadce0] text-[#1a73e8] px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">
-                                 <Icons.Navigation />
+                               <button 
+                                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap border"
+                                 style={{ backgroundColor: theme.buttonBg, borderColor: theme.buttonBorder, color: theme.buttonText }}
+                               >
+                                 <Icons.Navigation color={theme.buttonText} />
                                  시작
                                </button>
-                               <button className="flex items-center gap-1.5 bg-white border border-[#dadce0] text-[#1a73e8] px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">
-                                 <Icons.Save />
+                               <button 
+                                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap border"
+                                 style={{ backgroundColor: theme.buttonBg, borderColor: theme.buttonBorder, color: theme.buttonText }}
+                               >
+                                 <Icons.Save stroke={theme.saveIconStroke} />
                                  저장
                                </button>
-                               <button className="flex items-center gap-1.5 bg-white border border-[#dadce0] text-[#1a73e8] px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">
-                                 <Icons.Flag />
+                               <button 
+                                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap border"
+                                 style={{ backgroundColor: theme.buttonBg, borderColor: theme.buttonBorder, color: theme.buttonText }}
+                               >
+                                 <Icons.Flag color={theme.flagFill} />
                                  라벨 추가
                                </button>
                              </div>
