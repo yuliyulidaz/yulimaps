@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Google Maps Style Photo Card Maker</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Roboto:wght@400;500;700&family=Outfit:wght@500&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+      body {
+        font-family: 'Roboto', 'Noto Sans KR', sans-serif;
+        background-color: #f3f4f6;
+        overscroll-behavior: none;
+      }
+      /* Hide scrollbar */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      /* Custom Animations */
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.3s ease-out forwards;
+      }
+    </style>
+
+    <!-- Import Map for React modules -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "html-to-image": "https://esm.sh/html-to-image@1.11.11"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Main Application Code -->
+    <script type="text/babel" data-presets="react,typescript" data-type="module">
+      import React, { useState, useRef, useEffect } from 'react';
+      import { createRoot } from 'react-dom/client';
+      import { toPng } from 'html-to-image';
+
+      // --- Icons (Clean, No Shadows, Flat) ---
+      const Icons = {
+        Back: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+          </svg>
+        ),
+        More: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+          </svg>
+        ),
+        ShareWhite: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+          </svg>
+        ),
+        Share: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1f1f1f">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+          </svg>
+        ),
+        Bookmark: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="#1f1f1f">
+            <path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z"/>
+          </svg>
+        ),
+        Close: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="none" stroke="#1f1f1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ),
+        StarFull: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="14" viewBox="0 0 24 24" width="14" fill="#FBC02D">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+          </svg>
+        ),
+        StarEmpty: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="14" viewBox="0 0 24 24" width="14" fill="#E0E0E0">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>
+          </svg>
+        ),
+        Direction: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="white">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M21.71 11.29l-9-9c-.39-.39-1.02-.39-1.41 0l-9 9c-.39.39-.39 1.02 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9c.39-.38.39-1.01 0-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/>
+          </svg>
+        ),
+        Navigation: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1a73e8">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+          </svg>
+        ),
+        Save: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1a73e8">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z" fill="none" stroke="#1a73e8" strokeWidth="2"/>
+          </svg>
+        ),
+        Flag: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="#1a73e8">
+             <path d="M0 0h24v24H0z" fill="none"/><path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/>
+          </svg>
+        ),
+        GoogleLogo: () => (
+          <span className="text-white text-[22px]" style={{ fontFamily: 'Outfit, sans-serif', textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontWeight: 500 }}>
+            Google Maps
+          </span>
+        ),
+        ZoomIn: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="white">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+        ),
+        ZoomOut: () => (
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="white">
+            <path d="M0 0h24v24H0z" fill="none"/><path d="M19 13H5v-2h14v2z"/>
+          </svg>
+        ),
+      };
+
+      // --- Modern Input Component ---
+      const InputField = ({ label, value, onChange, maxLength, placeholder }) => {
+        return (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-gray-500 ml-1">{label}</label>
+            <input
+              type="text"
+              value={value}
+              onChange={onChange}
+              maxLength={maxLength}
+              placeholder={placeholder}
+              className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-gray-900 placeholder-gray-400"
+            />
+          </div>
+        );
+      };
+
+      // --- Fun Distance Units ---
+      const distUnits = [
+        'km', 'm', 'cm', 'mile', 'ft', 'yd', 
+        '광년(ly)', '파섹(pc)', 'AU(천문단위)', 
+        '걸음', '바나나', '지구 한바퀴'
+      ];
+
+      const App = () => {
+        const [image, setImage] = useState(null);
+        const [imgScale, setImgScale] = useState(1.0);
+        const [imgPos, setImgPos] = useState({ x: 0, y: 0 });
+        const [locationName, setLocationName] = useState('');
+        const [rating, setRating] = useState('0.0');
+        const [reviewCount, setReviewCount] = useState('');
+        const [description, setDescription] = useState('');
+        
+        // New Distance State
+        const [distValue, setDistValue] = useState('');
+        const [distUnit, setDistUnit] = useState('km');
+
+        const [isDownloading, setIsDownloading] = useState(false);
+        const [isDragging, setIsDragging] = useState(false);
+        
+        const dragStart = useRef({ x: 0, y: 0 });
+        const pinchStartDist = useRef(0);
+        const pinchStartScale = useRef(1.0);
+        
+        const previewRef = useRef(null);
+        const imgContainerRef = useRef(null);
+
+        const handleImageUpload = (e) => {
+          if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              setImage(event.target?.result);
+              setImgScale(1.0);
+              setImgPos({ x: 0, y: 0 });
+            };
+            reader.readAsDataURL(e.target.files[0]);
+          }
+        };
+
+        const handleRatingChange = (e) => {
+          setRating(parseFloat(e.target.value).toFixed(1));
+        };
+
+        const handleReviewCountChange = (e) => {
+          const rawValue = e.target.value.replace(/[^0-9]/g, '');
+          if (rawValue) {
+            setReviewCount(Number(rawValue).toLocaleString());
+          } else {
+            setReviewCount('');
+          }
+        };
+
+        const handleDistChange = (e) => {
+          const rawValue = e.target.value.replace(/[^0-9]/g, '');
+          if (rawValue) {
+            setDistValue(Number(rawValue).toLocaleString());
+          } else {
+            setDistValue('');
+          }
+        };
+
+        // --- Pinch-to-Zoom Logic (Touch Events) ---
+        const handleTouchStart = (e) => {
+          if (e.touches.length === 2) {
+            const dist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+            pinchStartDist.current = dist;
+            pinchStartScale.current = imgScale;
+          }
+        };
+
+        const handleTouchMove = (e) => {
+          if (e.touches.length === 2) {
+            const dist = Math.hypot(
+              e.touches[0].clientX - e.touches[1].clientX,
+              e.touches[0].clientY - e.touches[1].clientY
+            );
+            const newScale = pinchStartScale.current * (dist / pinchStartDist.current);
+            setImgScale(Math.min(Math.max(newScale, 1.0), 5.0));
+            return;
+          }
+        };
+
+        // --- Drag & Pan Logic ---
+        const handlePointerDown = (e) => {
+          if (!image) return;
+          if (!e.isPrimary) return;
+          
+          setIsDragging(true);
+          dragStart.current = { x: e.clientX, y: e.clientY };
+          e.target.setPointerCapture(e.pointerId);
+        };
+
+        const handlePointerMove = (e) => {
+          if (!isDragging || !imgContainerRef.current) return;
+          
+          const deltaX = e.clientX - dragStart.current.x;
+          const deltaY = e.clientY - dragStart.current.y;
+          
+          dragStart.current = { x: e.clientX, y: e.clientY };
+
+          const containerW = imgContainerRef.current.offsetWidth;
+          const containerH = imgContainerRef.current.offsetHeight;
+
+          if (containerW === 0 || containerH === 0) return;
+
+          const percentX = (deltaX / containerW) * 100;
+          const percentY = (deltaY / containerH) * 100;
+
+          setImgPos(prev => ({
+            x: prev.x + percentX,
+            y: prev.y + percentY
+          }));
+        };
+
+        const handlePointerUp = (e) => {
+          setIsDragging(false);
+          e.target.releasePointerCapture(e.pointerId);
+        };
+
+        const handleZoomIn = () => {
+          setImgScale(prev => Math.min(prev + 0.1, 5.0));
+        };
+
+        const handleZoomOut = () => {
+          setImgScale(prev => Math.max(prev - 0.1, 1.0));
+        };
+
+        const handleDownload = async () => {
+          if (previewRef.current && image) {
+            setIsDownloading(true);
+            try {
+              await document.fonts.ready;
+              await new Promise(resolve => setTimeout(resolve, 300));
+
+              const domWidth = previewRef.current.offsetWidth;
+              const domHeight = previewRef.current.offsetHeight;
+              const targetWidth = 1080;
+              const pixelRatio = targetWidth / domWidth;
+
+              const dataUrl = await toPng(previewRef.current, {
+                 width: domWidth,
+                 height: domHeight,
+                 pixelRatio: pixelRatio, 
+                 cacheBust: true,
+                 filter: (node) => {
+                   return !node.classList?.contains('floating-controls') && !node.classList?.contains('no-print');
+                 },
+              });
+
+              const link = document.createElement('a');
+              link.download = `google-place-card-${Date.now()}.png`;
+              link.href = dataUrl;
+              link.click();
+
+            } catch (err) {
+              console.error(err);
+              alert('저장에 실패했습니다. 다시 시도해주세요.');
+            } finally {
+              setIsDownloading(false);
+            }
+          }
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
+            <div className="max-w-md mx-auto p-4 flex flex-col gap-6">
+              
+              <div className="flex items-center justify-between pt-2">
+                <h1 className="text-2xl font-bold tracking-tight">구글 지도 포토 카드 📍</h1>
+              </div>
+
+              <div>
+                <label className="block w-full h-24 bg-white border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all flex flex-col items-center justify-center gap-2 group shadow-sm">
+                    {image ? (
+                       <div className="flex items-center gap-2">
+                         <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200">
+                            <img src={image} className="w-full h-full object-cover" />
+                         </div>
+                         <span className="text-sm font-bold text-blue-600">사진 변경하기</span>
+                       </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          <span className="text-sm font-semibold text-gray-500">배경 사진 선택</span>
+                        </div>
+                      </>
+                    )}
+                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                </label>
+              </div>
+
+              <div className="bg-white p-5 rounded-[24px] shadow-sm border border-gray-100 space-y-5">
+                   <InputField 
+                     label="장소 이름" 
+                     value={locationName} 
+                     onChange={(e) => setLocationName(e.target.value)} 
+                     placeholder=""
+                   />
+                   
+                   <div>
+                     <style>{`
+                         .custom-range::-webkit-slider-thumb {
+                           -webkit-appearance: none;
+                           appearance: none;
+                           width: 24px;
+                           height: 24px;
+                           border-radius: 50%;
+                           background: #ffffff;
+                           cursor: pointer;
+                           box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                           border: 1px solid #e5e7eb;
+                           margin-top: -8px;
+                         }
+                         .custom-range::-webkit-slider-runnable-track {
+                           width: 100%;
+                           height: 8px;
+                           cursor: pointer;
+                           border-radius: 9999px;
+                         }
+                     `}</style>
+                     <div className="flex justify-between items-end mb-2 px-1">
+                         <label className="text-xs font-semibold text-gray-500">별점</label>
+                         <span className="text-lg font-bold text-blue-600">{rating}</span>
+                     </div>
+                     <div className="relative w-full">
+                       <input 
+                         type="range" 
+                         min="0" max="5" step="0.5" 
+                         value={rating} 
+                         onChange={handleRatingChange}
+                         className="custom-range w-full h-2 rounded-lg appearance-none cursor-pointer focus:outline-none"
+                         style={{
+                           background: `linear-gradient(to right, #2563eb 0%, #2563eb ${(parseFloat(rating)/5)*100}%, #e5e7eb ${(parseFloat(rating)/5)*100}%, #e5e7eb 100%)`
+                         }}
+                       />
+                       <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-medium px-0.5">
+                           <span>0.0</span>
+                           <span>1.0</span>
+                           <span>2.0</span>
+                           <span>3.0</span>
+                           <span>4.0</span>
+                           <span>5.0</span>
+                       </div>
+                     </div>
+                   </div>
+
+                   <InputField 
+                     label="리뷰 수" 
+                     value={reviewCount} 
+                     onChange={handleReviewCountChange} 
+                     placeholder=""
+                   />
+
+                   <InputField 
+                     label="설명 또는 주소" 
+                     value={description} 
+                     onChange={(e) => setDescription(e.target.value)} 
+                     placeholder=""
+                   />
+                   
+                   <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-gray-500 ml-1">거리 정보</label>
+                      <div className="flex gap-2">
+                         <input
+                           type="text"
+                           value={distValue}
+                           onChange={handleDistChange}
+                           placeholder="거리 (숫자)"
+                           className="flex-1 h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-gray-900 placeholder-gray-400 text-right"
+                         />
+                         <div className="relative w-1/3 min-w-[120px]">
+                            <select 
+                              value={distUnit} 
+                              onChange={(e) => setDistUnit(e.target.value)}
+                              className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-gray-900 appearance-none font-medium"
+                            >
+                               {distUnits.map(unit => (
+                                 <option key={unit} value={unit}>{unit}</option>
+                               ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                               <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                 <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                               </svg>
+                            </div>
+                         </div>
+                      </div>
+                   </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                 <h2 className="text-lg font-bold text-gray-900 px-1 mt-4">미리보기</h2>
+                 <p className="text-xs text-gray-500 px-1 -mt-2 mb-1">사진을 직접 드래그하거나 핀치 줌으로 조절하세요</p>
+                 
+                 <div className="w-full bg-gray-200 rounded-[28px] p-2 border border-gray-300">
+                   <div 
+                     ref={previewRef}
+                     className="relative bg-white overflow-hidden shadow-2xl mx-auto rounded-[24px]"
+                     style={{
+                       width: '100%',
+                       aspectRatio: '9/16',
+                       maxWidth: '400px'
+                     }}
+                   >
+                       {!image ? (
+                          <div className="absolute inset-0 z-0 flex flex-col items-center justify-center bg-gray-100 text-gray-400">
+                            <span className="text-sm font-medium">사진을 업로드하면<br/>여기에 나타납니다</span>
+                          </div>
+                       ) : (
+                         <div 
+                            ref={imgContainerRef}
+                            className="absolute inset-0 overflow-hidden bg-white cursor-move touch-none"
+                            onPointerDown={handlePointerDown}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={handlePointerUp}
+                            onPointerLeave={handlePointerUp}
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            style={{ touchAction: 'none' }}
+                         >
+                            <img 
+                              src={image} 
+                              alt="preview"
+                              crossOrigin="anonymous" 
+                              className="bg-layer w-full h-full object-cover pointer-events-none select-none"
+                              style={{
+                                transform: `translate(${imgPos.x}%, ${imgPos.y}%) scale(${imgScale})`,
+                                transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                              }}
+                            />
+                         </div>
+                       )}
+
+                       {image && (
+                          <div className="floating-controls absolute top-[80px] right-3 z-40 animate-fade-in pointer-events-auto">
+                            <div className="bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 flex items-center gap-2 shadow-lg">
+                              <button 
+                                onClick={handleZoomOut}
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all"
+                              >
+                                <Icons.ZoomOut />
+                              </button>
+                              <span className="text-xs font-bold text-white w-8 text-center tabular-nums">
+                                {imgScale.toFixed(1)}x
+                              </span>
+                              <button 
+                                onClick={handleZoomIn}
+                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all"
+                              >
+                                <Icons.ZoomIn />
+                              </button>
+                            </div>
+                          </div>
+                       )}
+
+                       <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-start pt-6 gap-5 pr-1 pointer-events-none">
+                         <button className="w-10 h-10 rounded-full flex items-center justify-center transition-colors pointer-events-auto hover:bg-black/10 backdrop-blur-[2px]">
+                           <Icons.Back />
+                         </button>
+                         <div className="flex gap-2">
+                           <button className="w-10 h-10 rounded-full flex items-center justify-center transition-colors pointer-events-auto hover:bg-black/10 backdrop-blur-[2px]">
+                             <Icons.ShareWhite />
+                           </button>
+                           <button className="w-10 h-10 rounded-full flex items-center justify-center transition-colors pointer-events-auto hover:bg-black/10 backdrop-blur-[2px]">
+                             <Icons.More />
+                           </button>
+                         </div>
+                       </div>
+
+                       <div className="absolute bottom-[28%] left-5 z-20 pointer-events-none">
+                         <Icons.GoogleLogo />
+                       </div>
+
+                       <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-auto">
+                         <div className="bg-white w-full rounded-t-[20px] pb-8 pt-2 shadow-[0_-4px_20px_rgba(0,0,0,0.15)]">
+                           <div className="w-full flex justify-center pt-2 pb-1">
+                             <div className="w-8 h-1 bg-gray-300 rounded-full"></div>
+                           </div>
+
+                           <div className="px-5">
+                             <div className="flex justify-between items-start mt-2">
+                               <h2 className="text-[22px] font-bold text-[#202124] leading-tight max-w-[70%] break-words">
+                                 {locationName || '장소 이름'}
+                               </h2>
+                               <div className="flex gap-4 text-[#5f6368] pr-1">
+                                  <Icons.Bookmark />
+                                  <Icons.Share />
+                                  <Icons.Close />
+                               </div>
+                             </div>
+
+                             <div className="flex items-center gap-1 mt-2">
+                               <span className="text-sm font-medium text-[#202124]">{rating}</span>
+                               <div className="flex items-center gap-[1px]">
+                                 {[1, 2, 3, 4, 5].map((star) => (
+                                   <span key={star}>
+                                     {parseFloat(rating) >= star ? <Icons.StarFull /> : <Icons.StarEmpty />}
+                                   </span>
+                                 ))}
+                               </div>
+                               <span className="text-sm text-[#70757a] ml-1">
+                                 ({reviewCount ? reviewCount : '0'})
+                               </span>
+                             </div>
+
+                             <div className="mt-1 text-sm text-[#70757a]">
+                               {description || '장소 설명 또는 주소'}
+                             </div>
+
+                             <div className="mt-1 text-sm text-[#70757a]">
+                               {distValue ? `${distValue} ${distUnit}` : '거리 정보'}
+                             </div>
+
+                             <div className="flex gap-3 mt-4 overflow-x-auto no-scrollbar pb-1">
+                               <button className="flex items-center gap-1.5 bg-[#1a73e8] text-white px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap shadow-sm">
+                                 <Icons.Direction />
+                                 경로
+                               </button>
+                               <button className="flex items-center gap-1.5 bg-white border border-[#dadce0] text-[#1a73e8] px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">
+                                 <Icons.Navigation />
+                                 시작
+                               </button>
+                               <button className="flex items-center gap-1.5 bg-white border border-[#dadce0] text-[#1a73e8] px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">
+                                 <Icons.Save />
+                                 저장
+                               </button>
+                               <button className="flex items-center gap-1.5 bg-white border border-[#dadce0] text-[#1a73e8] px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap">
+                                 <Icons.Flag />
+                                 라벨 추가
+                               </button>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+                  </div>
+                 </div>
+
+                 <button 
+                    onClick={handleDownload}
+                    disabled={!image || isDownloading}
+                    className="w-full h-14 bg-black text-white rounded-2xl font-bold text-lg hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 transition-all flex items-center justify-center gap-2 shadow-lg mt-2 mb-10"
+                  >
+                    {isDownloading ? '저장 중...' : '카드 저장하기'}
+                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const root = createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
