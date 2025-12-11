@@ -263,10 +263,9 @@
               img.src = event.target.result;
               img.onload = () => {
                 const canvas = document.createElement('canvas');
-                // Aggressive downscaling for iOS/iPad stability
-                // Reduced from 1280 to prevent memory spikes on sharing
-                const MAX_WIDTH = isIOS ? 1024 : 1920; 
-                const MAX_HEIGHT = isIOS ? 1024 : 1920;
+                // Use higher resolution for Desktop, lower for iOS stability
+                const MAX_WIDTH = isIOS ? 1024 : 2560; 
+                const MAX_HEIGHT = isIOS ? 1024 : 2560;
                 let width = img.width;
                 let height = img.height;
 
@@ -286,8 +285,7 @@
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                // Lower quality slightly for iOS
-                resolve(canvas.toDataURL('image/jpeg', isIOS ? 0.7 : 0.8)); 
+                resolve(canvas.toDataURL('image/jpeg', isIOS ? 0.7 : 0.85)); 
               };
             };
           });
@@ -324,15 +322,43 @@
           }
         };
 
-        // --- New Positioning Logic (3x3 Grid Buttons) ---
-        // Offset value to shift the image by when clicking the grid
-        const OFFSET = 200; 
+        // --- Positioning Logic (Dynamic 3x3 Grid) ---
+        const handleAlign = (xDir, yDir) => {
+            if (!previewRef.current || !image) return;
 
-        // x, y logic:
-        // Center: 0, 0
-        // Top Left: move image Down (+y) and Right (+x) to see top-left corner
-        const handleAlign = (x, y) => {
-            setImgPos({ x, y });
+            const imgEl = previewRef.current.querySelector('img.bg-layer');
+            if (!imgEl || !imgEl.naturalWidth) return;
+
+            const container = previewRef.current;
+            const containerRect = container.getBoundingClientRect();
+            const containerW = containerRect.width;
+            const containerH = containerRect.height;
+
+            const naturalW = imgEl.naturalWidth;
+            const naturalH = imgEl.naturalHeight;
+
+            // Calculate 'cover' scale logic
+            const scaleX = containerW / naturalW;
+            const scaleY = containerH / naturalH;
+            const baseScale = Math.max(scaleX, scaleY);
+
+            // Current rendered dimension
+            const currentW = naturalW * baseScale * imgScale;
+            const currentH = naturalH * baseScale * imgScale;
+
+            // Maximum offset allowed (so edge matches edge)
+            // If rendered size > container, offset is half the difference
+            // If rendered size < container (zoom out), offset is negative (centering happens, but here we align to edge? 
+            // Usually we only align if image is larger. If smaller, align makes it stick to side inside. Logic still holds.)
+            const maxX = (currentW - containerW) / 2;
+            const maxY = (currentH - containerH) / 2;
+
+            // xDir: -1 (Left Button) -> Show Left Side of Image -> Move Image Right -> Positive Offset
+            // xDir: 1 (Right Button) -> Show Right Side of Image -> Move Image Left -> Negative Offset
+            const targetX = xDir * -maxX;
+            const targetY = yDir * -maxY;
+
+            setImgPos({ x: targetX, y: targetY });
         };
 
         const handleZoomIn = () => {
@@ -340,7 +366,7 @@
         };
 
         const handleZoomOut = () => {
-          setImgScale(prev => Math.max(prev - 0.1, 0.2));
+          setImgScale(prev => Math.max(prev - 0.1, 0.1));
         };
 
         const loadImage = (src) => {
@@ -359,16 +385,13 @@
             // Wait for fonts
             await document.fonts.ready;
             
-            // Initial delay to let things settle
             await new Promise(resolve => setTimeout(resolve, isIOS ? 800 : 300));
 
-            // Setup sizes
             const rect = previewRef.current.getBoundingClientRect();
-            // Reduce target resolution for iOS to prevent memory crashes
+            // Reduce target resolution for iOS
             const targetWidth = isIOS ? 720 : 1080; 
             const targetHeight = Math.round(targetWidth * (rect.height / rect.width));
             
-            // Retry logic loop
             let attempts = 0;
             const maxAttempts = 2;
             
@@ -384,31 +407,42 @@
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                     // 2. Draw Background Image Manually
-                    // This avoids foreignObject issues on iOS with large images
+                    // Precise replication of CSS behavior for canvas
                     try {
                         const loadedImg = await loadImage(image);
-                        const scaleRatio = targetWidth / rect.width;
                         
+                        // Calculate scaling to match CSS 'min-width: 100%; min-height: 100%'
+                        // This logic effectively implements 'object-fit: cover'
+                        const scaleX = canvas.width / loadedImg.width;
+                        const scaleY = canvas.height / loadedImg.height;
+                        const baseScale = Math.max(scaleX, scaleY);
+                        
+                        const renderWidth = loadedImg.width * baseScale;
+                        const renderHeight = loadedImg.height * baseScale;
+                        
+                        // Ratio between visible preview size and actual canvas size
+                        const domToCanvasRatio = canvas.width / rect.width;
+
                         ctx.save();
-                        // Translate to center of canvas
+                        // Move origin to center of canvas
                         ctx.translate(canvas.width / 2, canvas.height / 2);
-                        // Translate by user's position adjustment (scaled)
-                        ctx.translate(imgPos.x * scaleRatio, imgPos.y * scaleRatio);
-                        // Scale
+                        // Apply user offset (scaled to canvas size)
+                        ctx.translate(imgPos.x * domToCanvasRatio, imgPos.y * domToCanvasRatio);
+                        // Apply user zoom
                         ctx.scale(imgScale, imgScale);
-                        // Draw image centered at origin
-                        ctx.drawImage(loadedImg, -loadedImg.width / 2, -loadedImg.height / 2);
+                        // Draw image centered at current origin
+                        ctx.drawImage(loadedImg, -renderWidth / 2, -renderHeight / 2, renderWidth, renderHeight);
                         ctx.restore();
+                        
                     } catch (err) {
                         console.error("Failed to draw background image", err);
                     }
 
                     // 3. Hide Image for UI Capture
-                    // We use a small delay and state change to ensure the DOM updates
                     setIsHidden(true); 
                     await new Promise(resolve => setTimeout(resolve, 150));
 
-                    // 4. Capture UI Overlay (Text, Buttons, etc.)
+                    // 4. Capture UI Overlay
                     const uiOptions = {
                         width: Math.ceil(rect.width),
                         height: Math.ceil(rect.height),
@@ -420,15 +454,12 @@
                         },
                         skipAutoScale: true,
                         cacheBust: true,
-                        pixelRatio: targetWidth / rect.width, // Explicit ratio
-                        backgroundColor: 'transparent', // Ensure transparency
+                        pixelRatio: targetWidth / rect.width, 
+                        backgroundColor: 'transparent', 
                         filter: (node) => {
-                           // Exclude the background image layer entirely from html-to-image
                            if (node.classList?.contains('bg-layer')) return false;
-                           // Exclude controls
                            if (node.classList?.contains('floating-controls')) return false;
                            if (node.classList?.contains('no-print')) return false;
-                           // Exclude any other img tags that might be the background
                            if (node.tagName === 'IMG' && node.src === image) return false;
                            return true;
                         }
@@ -436,7 +467,6 @@
 
                     const uiBlob = await toPng(previewRef.current, uiOptions);
                     
-                    // Show Image Again
                     setIsHidden(false);
 
                     // 5. Composite UI onto Canvas
@@ -455,9 +485,9 @@
                 } catch (err) {
                     console.error(`Attempt ${attempts + 1} failed:`, err);
                     attempts++;
-                    setIsHidden(false); // Ensure visible on fail
+                    setIsHidden(false); 
                     if (attempts >= maxAttempts) throw err;
-                    await new Promise(r => setTimeout(r, 500)); // Wait before retry
+                    await new Promise(r => setTimeout(r, 500)); 
                 }
             }
         }
@@ -717,14 +747,12 @@
                               crossOrigin="anonymous" 
                               className="bg-layer pointer-events-none select-none"
                               style={{
-                                position: 'absolute',
-                                left: '50%',
-                                top: '50%',
-                                transform: `translate(calc(-50% + ${imgPos.x}px), calc(-50% + ${imgPos.y}px)) scale(${imgScale})`,
-                                minWidth: '100%',
-                                minHeight: '100%',
-                                maxWidth: 'none',
-                                objectFit: 'contain',
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                objectPosition: `calc(50% + ${imgPos.x}px) calc(50% + ${imgPos.y}px)`,
+                                transform: `scale(${imgScale})`,
+                                transformOrigin: 'center center',
                                 transition: 'transform 0.1s ease-out'
                               }}
                             />
@@ -748,35 +776,35 @@
                             {/* 3x3 Grid Controls (Replacing D-Pad) */}
                             <div className="bg-black/40 backdrop-blur-md rounded-2xl p-1.5 border border-white/10 shadow-lg grid grid-cols-3 gap-1 w-[100px]">
                                {/* Row 1 */}
-                               <button onClick={() => handleAlign(OFFSET, OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(-1, -1)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-t-2 border-l-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
-                               <button onClick={() => handleAlign(0, OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(0, -1)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-t-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
-                               <button onClick={() => handleAlign(-OFFSET, OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(1, -1)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-t-2 border-r-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
 
                                {/* Row 2 */}
-                               <button onClick={() => handleAlign(OFFSET, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(-1, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-l-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
                                <button onClick={() => handleAlign(0, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/20 hover:bg-white/30 active:bg-white/40 transition-all group">
                                   <div className="w-1.5 h-1.5 bg-white rounded-full opacity-90 group-hover:opacity-100 shadow-[0_0_4px_rgba(255,255,255,0.5)]"></div>
                                </button>
-                               <button onClick={() => handleAlign(-OFFSET, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(1, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-r-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
 
                                {/* Row 3 */}
-                               <button onClick={() => handleAlign(OFFSET, -OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(-1, 1)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-b-2 border-l-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
-                               <button onClick={() => handleAlign(0, -OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(0, 1)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-b-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
-                               <button onClick={() => handleAlign(-OFFSET, -OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                               <button onClick={() => handleAlign(1, 1)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
                                   <div className="w-2 h-2 border-b-2 border-r-2 border-white opacity-80 group-hover:opacity-100"></div>
                                </button>
                             </div>
