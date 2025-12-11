@@ -161,21 +161,6 @@
           <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="currentColor">
             <path d="M0 0h24v24H0z" fill="none"/><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
           </svg>
-        ),
-        ArrowUp: () => (
-            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
-        ),
-        ArrowDown: () => (
-            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
-        ),
-        ArrowLeft: () => (
-            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-        ),
-        ArrowRight: () => (
-            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
-        ),
-        CenterFocus: () => (
-            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-3H9V9h2v4zm1 5c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><circle cx="12" cy="12" r="3"/></svg>
         )
       };
 
@@ -279,8 +264,9 @@
               img.onload = () => {
                 const canvas = document.createElement('canvas');
                 // Aggressive downscaling for iOS/iPad stability
-                const MAX_WIDTH = 1280;
-                const MAX_HEIGHT = 1280;
+                // Reduced from 1280 to prevent memory spikes on sharing
+                const MAX_WIDTH = isIOS ? 1024 : 1920; 
+                const MAX_HEIGHT = isIOS ? 1024 : 1920;
                 let width = img.width;
                 let height = img.height;
 
@@ -300,7 +286,8 @@
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', 0.8)); 
+                // Lower quality slightly for iOS
+                resolve(canvas.toDataURL('image/jpeg', isIOS ? 0.7 : 0.8)); 
               };
             };
           });
@@ -338,15 +325,14 @@
         };
 
         // --- New Positioning Logic (3x3 Grid Buttons) ---
-        const handleNudge = (dx, dy) => {
-            setImgPos(prev => ({
-                x: prev.x + dx,
-                y: prev.y + dy
-            }));
-        };
+        // Offset value to shift the image by when clicking the grid
+        const OFFSET = 200; 
 
-        const handleResetPos = () => {
-            setImgPos({ x: 0, y: 0 });
+        // x, y logic:
+        // Center: 0, 0
+        // Top Left: move image Down (+y) and Right (+x) to see top-left corner
+        const handleAlign = (x, y) => {
+            setImgPos({ x, y });
         };
 
         const handleZoomIn = () => {
@@ -374,11 +360,12 @@
             await document.fonts.ready;
             
             // Initial delay to let things settle
-            await new Promise(resolve => setTimeout(resolve, isIOS ? 600 : 300));
+            await new Promise(resolve => setTimeout(resolve, isIOS ? 800 : 300));
 
             // Setup sizes
             const rect = previewRef.current.getBoundingClientRect();
-            const targetWidth = 1080; 
+            // Reduce target resolution for iOS to prevent memory crashes
+            const targetWidth = isIOS ? 720 : 1080; 
             const targetHeight = Math.round(targetWidth * (rect.height / rect.width));
             
             // Retry logic loop
@@ -419,7 +406,7 @@
                     // 3. Hide Image for UI Capture
                     // We use a small delay and state change to ensure the DOM updates
                     setIsHidden(true); 
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise(resolve => setTimeout(resolve, 150));
 
                     // 4. Capture UI Overlay (Text, Buttons, etc.)
                     const uiOptions = {
@@ -428,12 +415,13 @@
                         canvasWidth: targetWidth,
                         canvasHeight: targetHeight,
                         style: {
-                        margin: 0,
-                        transform: 'none',
+                            margin: 0,
+                            transform: 'none',
                         },
                         skipAutoScale: true,
                         cacheBust: true,
-                        pixelRatio: targetWidth / rect.width,
+                        pixelRatio: targetWidth / rect.width, // Explicit ratio
+                        backgroundColor: 'transparent', // Ensure transparency
                         filter: (node) => {
                            // Exclude the background image layer entirely from html-to-image
                            if (node.classList?.contains('bg-layer')) return false;
@@ -491,6 +479,8 @@
                     } else {
                         alert('이 기기에서는 공유 기능을 사용할 수 없습니다.');
                     }
+                 } else {
+                    alert('이미지 생성에 실패했습니다. 다시 시도해주세요.');
                  }
               } else {
                  const dataUrl = await generateImage('png');
@@ -755,20 +745,40 @@
                               </button>
                             </div>
 
-                            {/* D-Pad Controls */}
+                            {/* 3x3 Grid Controls (Replacing D-Pad) */}
                             <div className="bg-black/40 backdrop-blur-md rounded-2xl p-1.5 border border-white/10 shadow-lg grid grid-cols-3 gap-1 w-[100px]">
                                {/* Row 1 */}
-                               <button className="w-7 h-7" disabled></button>
-                               <button onClick={() => handleNudge(0, -20)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowUp /></button>
-                               <button className="w-7 h-7" disabled></button>
+                               <button onClick={() => handleAlign(OFFSET, OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-t-2 border-l-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
+                               <button onClick={() => handleAlign(0, OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-t-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
+                               <button onClick={() => handleAlign(-OFFSET, OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-t-2 border-r-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
+
                                {/* Row 2 */}
-                               <button onClick={() => handleNudge(-20, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowLeft /></button>
-                               <button onClick={handleResetPos} className="w-7 h-7 flex items-center justify-center rounded bg-white/20 text-white hover:bg-white/30 active:bg-white/40 transition-all"><Icons.CenterFocus /></button>
-                               <button onClick={() => handleNudge(20, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowRight /></button>
+                               <button onClick={() => handleAlign(OFFSET, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-l-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
+                               <button onClick={() => handleAlign(0, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/20 hover:bg-white/30 active:bg-white/40 transition-all group">
+                                  <div className="w-1.5 h-1.5 bg-white rounded-full opacity-90 group-hover:opacity-100 shadow-[0_0_4px_rgba(255,255,255,0.5)]"></div>
+                               </button>
+                               <button onClick={() => handleAlign(-OFFSET, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-r-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
+
                                {/* Row 3 */}
-                               <button className="w-7 h-7" disabled></button>
-                               <button onClick={() => handleNudge(0, 20)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowDown /></button>
-                               <button className="w-7 h-7" disabled></button>
+                               <button onClick={() => handleAlign(OFFSET, -OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-b-2 border-l-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
+                               <button onClick={() => handleAlign(0, -OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-b-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
+                               <button onClick={() => handleAlign(-OFFSET, -OFFSET)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 active:bg-white/30 transition-all group">
+                                  <div className="w-2 h-2 border-b-2 border-r-2 border-white opacity-80 group-hover:opacity-100"></div>
+                               </button>
                             </div>
                           </div>
                        )}
@@ -787,8 +797,10 @@
                          </div>
                        </div>
 
-                       <div className="absolute bottom-[30%] left-5 z-20 pointer-events-none">
-                         <Icons.GoogleLogo />
+                       <div className="absolute bottom-[32%] left-5 z-20 pointer-events-none">
+                         <div className="opacity-80">
+                           <Icons.GoogleLogo />
+                         </div>
                        </div>
 
                        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-auto">
