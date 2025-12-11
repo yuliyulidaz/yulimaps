@@ -192,6 +192,7 @@
         // --- State Management ---
         const [isLoaded, setIsLoaded] = useState(false);
         const [image, setImage] = useState(null);
+        const [originalImage, setOriginalImage] = useState(null); // Keep original for high quality canvas
         const [imgScale, setImgScale] = useState(1.0);
         const [imgPos, setImgPos] = useState({ x: 0, y: 0 });
         
@@ -210,6 +211,7 @@
 
         const [isDownloading, setIsDownloading] = useState(false);
         const [isDragging, setIsDragging] = useState(false);
+        const [isHidden, setIsHidden] = useState(false); // To hide image for UI capture
         
         const dragStart = useRef({ x: 0, y: 0 });
         const pinchStartDist = useRef(0);
@@ -258,7 +260,6 @@
           }
         }, [locationName, rating, reviewCount, description, distValue, distUnit, isVerified, isDarkMode, aspectRatio, isLoaded]);
 
-        // Image compression utility for iOS
         const compressImage = (file) => {
           return new Promise((resolve) => {
             const reader = new FileReader();
@@ -268,9 +269,9 @@
               img.src = event.target.result;
               img.onload = () => {
                 const canvas = document.createElement('canvas');
-                // Aggressive downscaling for iOS/iPad to prevent white screen crashes
-                const MAX_WIDTH = isIOS ? 1280 : 1920;
-                const MAX_HEIGHT = isIOS ? 1280 : 1920;
+                // Aggressive downscaling for iOS/iPad stability
+                const MAX_WIDTH = 1280;
+                const MAX_HEIGHT = 1280;
                 let width = img.width;
                 let height = img.height;
 
@@ -290,8 +291,8 @@
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                // Reduce quality slightly for iOS/iPad stability
-                resolve(canvas.toDataURL('image/jpeg', isIOS ? 0.75 : 0.9));
+                // Keep the "original" (compressed) base64
+                resolve(canvas.toDataURL('image/jpeg', 0.8)); 
               };
             };
           });
@@ -387,57 +388,108 @@
           setImgScale(prev => Math.max(prev - 0.1, 0.2));
         };
 
+        const loadImage = (src) => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        };
+
         const generateImage = async (format = 'blob') => {
             if (!previewRef.current || !image) return null;
 
             await document.fonts.ready;
-            // Longer delay for iOS to allow rendering
-            await new Promise(resolve => setTimeout(resolve, isIOS ? 800 : 500));
+            // Longer delay for iOS
+            await new Promise(resolve => setTimeout(resolve, isIOS ? 600 : 300));
 
+            // 1. Setup Base Canvas (1080p width)
             const rect = previewRef.current.getBoundingClientRect();
-            // Round inputs to avoid sub-pixel gaps
-            const domWidth = Math.round(rect.width);
-            const domHeight = Math.round(rect.height);
-            
             const targetWidth = 1080;
-            const targetHeight = Math.round(targetWidth * (domHeight / domWidth));
+            const targetHeight = Math.round(targetWidth * (rect.height / rect.width));
             
-            const options = {
-                 width: domWidth,
-                 height: domHeight,
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
+
+            // 2. Fill Background
+            ctx.fillStyle = isDarkMode ? '#202124' : '#f3f4f6'; // Match bg
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 3. Draw Background Image Manually (Bypassing foreignObject bug)
+            try {
+                const loadedImg = await loadImage(image);
+                
+                // Calculate Scale Ratio (Canvas / DOM)
+                const scaleRatio = targetWidth / rect.width;
+                
+                ctx.save();
+                // Move to center of canvas
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                
+                // Apply user transforms (position * scaleRatio)
+                ctx.translate(imgPos.x * scaleRatio, imgPos.y * scaleRatio);
+                ctx.scale(imgScale, imgScale);
+                
+                // Draw image centered
+                ctx.drawImage(loadedImg, -loadedImg.width / 2, -loadedImg.height / 2);
+                ctx.restore();
+            } catch (err) {
+                console.error("Failed to draw background image", err);
+            }
+
+            // 4. Capture UI Overlay (Text, Buttons) via html-to-image
+            // Hide the image temporarily in DOM
+            setIsHidden(true); 
+            // Wait for React to render the hide
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            const uiOptions = {
+                 width: Math.round(rect.width),
+                 height: Math.round(rect.height),
                  canvasWidth: targetWidth,
                  canvasHeight: targetHeight,
                  style: {
                    margin: 0,
                    transform: 'none',
-                   display: 'block'
                  },
+                 skipAutoScale: true,
                  cacheBust: true,
-                 skipAutoScale: true, // Fix for iOS white line/box
-                 useCORS: true,
+                 pixelRatio: targetWidth / rect.width, // Force exact resolution
                  filter: (node) => {
-                   return !node.classList?.contains('floating-controls') && !node.classList?.contains('no-print');
-                 },
+                   // Exclude the image container (we drew it manually) and controls
+                   if (node.classList?.contains('bg-layer')) return false;
+                   if (node.classList?.contains('floating-controls')) return false;
+                   if (node.classList?.contains('no-print')) return false;
+                   return true;
+                 }
             };
 
-            // Attempt retry logic for robust iOS capture
-            let result = null;
+            let uiBlob = null;
             try {
-               if (format === 'blob') {
-                  result = await toBlob(previewRef.current, options);
-               } else {
-                  result = await toPng(previewRef.current, options);
-               }
-            } catch (firstErr) {
-               console.warn("First capture attempt failed, retrying...", firstErr);
-               await new Promise(resolve => setTimeout(resolve, 800));
-               if (format === 'blob') {
-                  result = await toBlob(previewRef.current, options);
-               } else {
-                  result = await toPng(previewRef.current, options);
-               }
+               uiBlob = await toPng(previewRef.current, uiOptions);
+            } catch (err) {
+               console.error("UI Capture failed", err);
             }
-            return result;
+
+            // Show image again
+            setIsHidden(false);
+
+            // 5. Composite UI onto Canvas
+            if (uiBlob) {
+                const uiImg = await loadImage(uiBlob);
+                ctx.drawImage(uiImg, 0, 0, canvas.width, canvas.height);
+            }
+
+            // 6. Return Result
+            if (format === 'blob') {
+                return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            } else {
+                return canvas.toDataURL('image/png');
+            }
         }
 
         const handleDownload = async () => {
@@ -452,11 +504,10 @@
                         try {
                            await navigator.share({ files: [file] });
                         } catch (shareErr) {
-                           if (shareErr.name !== 'AbortError') throw shareErr;
+                           // Ignore share cancellation
                         }
                     } else {
-                        // Fallback if sharing is technically not supported even on iOS
-                        alert('이 기기에서는 공유 기능을 사용할 수 없습니다. 스크린샷을 이용해주세요.');
+                        alert('이 기기에서는 공유 기능을 사용할 수 없습니다.');
                     }
                  }
               } else {
@@ -469,11 +520,7 @@
 
             } catch (err) {
               console.error(err);
-              if (isIOS) {
-                  alert('이미지 생성에 실패했습니다. 사진 용량을 더 줄이거나 잠시 후 다시 시도해보세요.');
-              } else {
-                  alert('저장에 실패했습니다. 다시 시도해주세요.');
-              }
+              alert('이미지 생성 중 오류가 발생했습니다.');
             } finally {
               setIsDownloading(false);
             }
@@ -484,13 +531,13 @@
         const theme = {
            bg: isDarkMode ? '#202124' : '#ffffff',
            textPrimary: isDarkMode ? '#e8eaed' : '#202124',
-           textSecondary: isDarkMode ? '#9aa0a6' : '#70757A', // Authentic Gray
+           textSecondary: isDarkMode ? '#9aa0a6' : '#70757A',
            iconColor: isDarkMode ? '#e8eaed' : '#3c4043',
            buttonBg: isDarkMode ? '#303134' : '#ffffff',
            buttonBorder: isDarkMode ? '#3c4043' : '#dadce0',
-           buttonText: isDarkMode ? '#8ab4f8' : '#1a73e8', // Authentic Blue
+           buttonText: isDarkMode ? '#8ab4f8' : '#1a73e8',
            saveIconStroke: isDarkMode ? '#8ab4f8' : '#1a73e8',
-           navFill: isDarkMode ? '#8ab4f8' : '#1a73e8', // Directions Blue
+           navFill: isDarkMode ? '#8ab4f8' : '#1a73e8',
            flagFill: isDarkMode ? '#8ab4f8' : '#1a73e8',
            starEmpty: isDarkMode ? '#5f6368' : '#E0E0E0'
         };
@@ -690,7 +737,7 @@
                        ) : (
                          <div 
                             ref={imgContainerRef}
-                            className="absolute inset-0 overflow-hidden cursor-move touch-none"
+                            className={`absolute inset-0 overflow-hidden cursor-move touch-none ${isHidden ? 'opacity-0' : 'opacity-100'}`}
                             style={{ backgroundColor: theme.bg, touchAction: 'none' }}
                             onPointerDown={handlePointerDown}
                             onPointerMove={handlePointerMove}
@@ -719,7 +766,7 @@
                          </div>
                        )}
 
-                       {image && (
+                       {image && !isHidden && (
                           <div className="floating-controls absolute top-[80px] right-3 z-40 animate-fade-in pointer-events-auto">
                             <div className="bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 flex items-center gap-2 shadow-lg">
                               <button 
