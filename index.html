@@ -161,6 +161,21 @@
           <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="currentColor">
             <path d="M0 0h24v24H0z" fill="none"/><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
           </svg>
+        ),
+        ArrowUp: () => (
+            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+        ),
+        ArrowDown: () => (
+            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+        ),
+        ArrowLeft: () => (
+            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        ),
+        ArrowRight: () => (
+            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        ),
+        CenterFocus: () => (
+            <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-3H9V9h2v4zm1 5c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><circle cx="12" cy="12" r="3"/></svg>
         )
       };
 
@@ -192,7 +207,6 @@
         // --- State Management ---
         const [isLoaded, setIsLoaded] = useState(false);
         const [image, setImage] = useState(null);
-        const [originalImage, setOriginalImage] = useState(null); // Keep original for high quality canvas
         const [imgScale, setImgScale] = useState(1.0);
         const [imgPos, setImgPos] = useState({ x: 0, y: 0 });
         
@@ -210,12 +224,7 @@
         const [aspectRatio, setAspectRatio] = useState('9/16');
 
         const [isDownloading, setIsDownloading] = useState(false);
-        const [isDragging, setIsDragging] = useState(false);
         const [isHidden, setIsHidden] = useState(false); // To hide image for UI capture
-        
-        const dragStart = useRef({ x: 0, y: 0 });
-        const pinchStartDist = useRef(0);
-        const pinchStartScale = useRef(1.0);
         
         const previewRef = useRef(null);
         const imgContainerRef = useRef(null);
@@ -291,7 +300,6 @@
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                // Keep the "original" (compressed) base64
                 resolve(canvas.toDataURL('image/jpeg', 0.8)); 
               };
             };
@@ -329,55 +337,16 @@
           }
         };
 
-        const handleTouchStart = (e) => {
-          if (e.touches.length === 2) {
-            const dist = Math.hypot(
-              e.touches[0].clientX - e.touches[1].clientX,
-              e.touches[0].clientY - e.touches[1].clientY
-            );
-            pinchStartDist.current = dist;
-            pinchStartScale.current = imgScale;
-          }
+        // --- New Positioning Logic (3x3 Grid Buttons) ---
+        const handleNudge = (dx, dy) => {
+            setImgPos(prev => ({
+                x: prev.x + dx,
+                y: prev.y + dy
+            }));
         };
 
-        const handleTouchMove = (e) => {
-          if (e.touches.length === 2) {
-            const dist = Math.hypot(
-              e.touches[0].clientX - e.touches[1].clientX,
-              e.touches[0].clientY - e.touches[1].clientY
-            );
-            const newScale = pinchStartScale.current * (dist / pinchStartDist.current);
-            setImgScale(Math.min(Math.max(newScale, 0.2), 5.0));
-            return;
-          }
-        };
-
-        const handlePointerDown = (e) => {
-          if (!image) return;
-          if (!e.isPrimary) return;
-          
-          setIsDragging(true);
-          dragStart.current = { x: e.clientX, y: e.clientY };
-          e.target.setPointerCapture(e.pointerId);
-        };
-
-        const handlePointerMove = (e) => {
-          if (!isDragging || !imgContainerRef.current) return;
-          
-          const deltaX = e.clientX - dragStart.current.x;
-          const deltaY = e.clientY - dragStart.current.y;
-          
-          dragStart.current = { x: e.clientX, y: e.clientY };
-
-          setImgPos(prev => ({
-            x: prev.x + deltaX,
-            y: prev.y + deltaY
-          }));
-        };
-
-        const handlePointerUp = (e) => {
-          setIsDragging(false);
-          e.target.releasePointerCapture(e.pointerId);
+        const handleResetPos = () => {
+            setImgPos({ x: 0, y: 0 });
         };
 
         const handleZoomIn = () => {
@@ -402,12 +371,13 @@
             if (!previewRef.current || !image) return null;
 
             await document.fonts.ready;
-            // Longer delay for iOS
             await new Promise(resolve => setTimeout(resolve, isIOS ? 600 : 300));
 
-            // 1. Setup Base Canvas (1080p width)
+            // 1. Setup Base Canvas
             const rect = previewRef.current.getBoundingClientRect();
+            // Force 1080p width for standard
             const targetWidth = 1080;
+            // Round height to nearest integer to avoid clipping
             const targetHeight = Math.round(targetWidth * (rect.height / rect.width));
             
             const canvas = document.createElement('canvas');
@@ -416,40 +386,37 @@
             const ctx = canvas.getContext('2d');
 
             // 2. Fill Background
-            ctx.fillStyle = isDarkMode ? '#202124' : '#f3f4f6'; // Match bg
+            ctx.fillStyle = isDarkMode ? '#202124' : '#f3f4f6';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 3. Draw Background Image Manually (Bypassing foreignObject bug)
+            // 3. Draw Background Image Manually
             try {
                 const loadedImg = await loadImage(image);
                 
-                // Calculate Scale Ratio (Canvas / DOM)
                 const scaleRatio = targetWidth / rect.width;
                 
                 ctx.save();
-                // Move to center of canvas
                 ctx.translate(canvas.width / 2, canvas.height / 2);
                 
-                // Apply user transforms (position * scaleRatio)
+                // IMPORTANT: Match CSS Logic
+                // CSS: translate(calc(-50% + x), calc(-50% + y))
+                // Canvas: translate(center) -> translate(x * ratio, y * ratio)
                 ctx.translate(imgPos.x * scaleRatio, imgPos.y * scaleRatio);
                 ctx.scale(imgScale, imgScale);
                 
-                // Draw image centered
                 ctx.drawImage(loadedImg, -loadedImg.width / 2, -loadedImg.height / 2);
                 ctx.restore();
             } catch (err) {
                 console.error("Failed to draw background image", err);
             }
 
-            // 4. Capture UI Overlay (Text, Buttons) via html-to-image
-            // Hide the image temporarily in DOM
+            // 4. Capture UI Overlay
             setIsHidden(true); 
-            // Wait for React to render the hide
             await new Promise(resolve => setTimeout(resolve, 50));
 
             const uiOptions = {
-                 width: Math.round(rect.width),
-                 height: Math.round(rect.height),
+                 width: Math.ceil(rect.width),
+                 height: Math.ceil(rect.height),
                  canvasWidth: targetWidth,
                  canvasHeight: targetHeight,
                  style: {
@@ -458,9 +425,8 @@
                  },
                  skipAutoScale: true,
                  cacheBust: true,
-                 pixelRatio: targetWidth / rect.width, // Force exact resolution
+                 pixelRatio: targetWidth / rect.width,
                  filter: (node) => {
-                   // Exclude the image container (we drew it manually) and controls
                    if (node.classList?.contains('bg-layer')) return false;
                    if (node.classList?.contains('floating-controls')) return false;
                    if (node.classList?.contains('no-print')) return false;
@@ -475,16 +441,15 @@
                console.error("UI Capture failed", err);
             }
 
-            // Show image again
             setIsHidden(false);
 
-            // 5. Composite UI onto Canvas
+            // 5. Composite
             if (uiBlob) {
                 const uiImg = await loadImage(uiBlob);
                 ctx.drawImage(uiImg, 0, 0, canvas.width, canvas.height);
             }
 
-            // 6. Return Result
+            // 6. Return
             if (format === 'blob') {
                 return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             } else {
@@ -527,7 +492,6 @@
           }
         };
         
-        // Colors based on authentic Google Maps Dark Mode & Light Mode
         const theme = {
            bg: isDarkMode ? '#202124' : '#ffffff',
            textPrimary: isDarkMode ? '#e8eaed' : '#202124',
@@ -717,7 +681,7 @@
               {/* Right Column: Preview */}
               <div className="flex flex-col gap-3 w-full lg:w-1/2 lg:sticky lg:top-8">
                  <h2 className="text-lg font-bold text-gray-900 px-1 mt-4 lg:mt-0">미리보기</h2>
-                 <p className="text-xs text-gray-500 px-1 -mt-2 mb-1">사진을 직접 드래그하거나 핀치 줌으로 조절하세요</p>
+                 <p className="text-xs text-gray-500 px-1 -mt-2 mb-1">우측 하단 버튼으로 사진 위치를 조절하세요</p>
                  
                  <div className="w-full">
                    <div 
@@ -737,14 +701,8 @@
                        ) : (
                          <div 
                             ref={imgContainerRef}
-                            className={`absolute inset-0 overflow-hidden cursor-move touch-none ${isHidden ? 'opacity-0' : 'opacity-100'}`}
-                            style={{ backgroundColor: theme.bg, touchAction: 'none' }}
-                            onPointerDown={handlePointerDown}
-                            onPointerMove={handlePointerMove}
-                            onPointerUp={handlePointerUp}
-                            onPointerLeave={handlePointerUp}
-                            onTouchStart={handleTouchStart}
-                            onTouchMove={handleTouchMove}
+                            className={`absolute inset-0 overflow-hidden ${isHidden ? 'opacity-0' : 'opacity-100'}`}
+                            style={{ backgroundColor: theme.bg }}
                          >
                             <img 
                               src={image} 
@@ -760,30 +718,40 @@
                                 minHeight: '100%',
                                 maxWidth: 'none',
                                 objectFit: 'contain',
-                                transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                                transition: 'transform 0.1s ease-out'
                               }}
                             />
                          </div>
                        )}
 
+                       {/* New 3x3 Grid Controls */}
                        {image && !isHidden && (
-                          <div className="floating-controls absolute top-[80px] right-3 z-40 animate-fade-in pointer-events-auto">
-                            <div className="bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 flex items-center gap-2 shadow-lg">
-                              <button 
-                                onClick={handleZoomOut}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all"
-                              >
-                                <Icons.ZoomOut />
-                              </button>
-                              <span className="text-xs font-bold text-white w-8 text-center tabular-nums">
-                                {imgScale.toFixed(1)}x
-                              </span>
-                              <button 
-                                onClick={handleZoomIn}
-                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all"
-                              >
+                          <div className="floating-controls absolute bottom-[220px] right-3 z-40 animate-fade-in pointer-events-auto flex flex-col gap-2 items-end">
+                             {/* Zoom Controls */}
+                            <div className="bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 flex flex-col items-center gap-1 shadow-lg w-10">
+                              <button onClick={handleZoomIn} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all">
                                 <Icons.ZoomIn />
                               </button>
+                              <span className="text-[10px] font-bold text-white text-center">{imgScale.toFixed(1)}</span>
+                              <button onClick={handleZoomOut} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all">
+                                <Icons.ZoomOut />
+                              </button>
+                            </div>
+
+                            {/* D-Pad Controls */}
+                            <div className="bg-black/40 backdrop-blur-md rounded-2xl p-1.5 border border-white/10 shadow-lg grid grid-cols-3 gap-1 w-[100px]">
+                               {/* Row 1 */}
+                               <button className="w-7 h-7" disabled></button>
+                               <button onClick={() => handleNudge(0, -20)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowUp /></button>
+                               <button className="w-7 h-7" disabled></button>
+                               {/* Row 2 */}
+                               <button onClick={() => handleNudge(-20, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowLeft /></button>
+                               <button onClick={handleResetPos} className="w-7 h-7 flex items-center justify-center rounded bg-white/20 text-white hover:bg-white/30 active:bg-white/40 transition-all"><Icons.CenterFocus /></button>
+                               <button onClick={() => handleNudge(20, 0)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowRight /></button>
+                               {/* Row 3 */}
+                               <button className="w-7 h-7" disabled></button>
+                               <button onClick={() => handleNudge(0, 20)} className="w-7 h-7 flex items-center justify-center rounded bg-white/10 text-white hover:bg-white/20 active:bg-white/30 transition-all"><Icons.ArrowDown /></button>
+                               <button className="w-7 h-7" disabled></button>
                             </div>
                           </div>
                        )}
