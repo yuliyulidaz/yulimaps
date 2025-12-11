@@ -370,90 +370,107 @@
         const generateImage = async (format = 'blob') => {
             if (!previewRef.current || !image) return null;
 
+            // Wait for fonts
             await document.fonts.ready;
+            
+            // Initial delay to let things settle
             await new Promise(resolve => setTimeout(resolve, isIOS ? 600 : 300));
 
-            // 1. Setup Base Canvas
+            // Setup sizes
             const rect = previewRef.current.getBoundingClientRect();
-            // Force 1080p width for standard
-            const targetWidth = 1080;
-            // Round height to nearest integer to avoid clipping
+            const targetWidth = 1080; 
             const targetHeight = Math.round(targetWidth * (rect.height / rect.width));
             
-            const canvas = document.createElement('canvas');
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-            const ctx = canvas.getContext('2d');
+            // Retry logic loop
+            let attempts = 0;
+            const maxAttempts = 2;
+            
+            while (attempts < maxAttempts) {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    const ctx = canvas.getContext('2d');
 
-            // 2. Fill Background
-            ctx.fillStyle = isDarkMode ? '#202124' : '#f3f4f6';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    // 1. Fill Background
+                    ctx.fillStyle = isDarkMode ? '#202124' : '#f3f4f6';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 3. Draw Background Image Manually
-            try {
-                const loadedImg = await loadImage(image);
-                
-                const scaleRatio = targetWidth / rect.width;
-                
-                ctx.save();
-                ctx.translate(canvas.width / 2, canvas.height / 2);
-                
-                // IMPORTANT: Match CSS Logic
-                // CSS: translate(calc(-50% + x), calc(-50% + y))
-                // Canvas: translate(center) -> translate(x * ratio, y * ratio)
-                ctx.translate(imgPos.x * scaleRatio, imgPos.y * scaleRatio);
-                ctx.scale(imgScale, imgScale);
-                
-                ctx.drawImage(loadedImg, -loadedImg.width / 2, -loadedImg.height / 2);
-                ctx.restore();
-            } catch (err) {
-                console.error("Failed to draw background image", err);
-            }
+                    // 2. Draw Background Image Manually
+                    // This avoids foreignObject issues on iOS with large images
+                    try {
+                        const loadedImg = await loadImage(image);
+                        const scaleRatio = targetWidth / rect.width;
+                        
+                        ctx.save();
+                        // Translate to center of canvas
+                        ctx.translate(canvas.width / 2, canvas.height / 2);
+                        // Translate by user's position adjustment (scaled)
+                        ctx.translate(imgPos.x * scaleRatio, imgPos.y * scaleRatio);
+                        // Scale
+                        ctx.scale(imgScale, imgScale);
+                        // Draw image centered at origin
+                        ctx.drawImage(loadedImg, -loadedImg.width / 2, -loadedImg.height / 2);
+                        ctx.restore();
+                    } catch (err) {
+                        console.error("Failed to draw background image", err);
+                    }
 
-            // 4. Capture UI Overlay
-            setIsHidden(true); 
-            await new Promise(resolve => setTimeout(resolve, 50));
+                    // 3. Hide Image for UI Capture
+                    // We use a small delay and state change to ensure the DOM updates
+                    setIsHidden(true); 
+                    await new Promise(resolve => setTimeout(resolve, 100));
 
-            const uiOptions = {
-                 width: Math.ceil(rect.width),
-                 height: Math.ceil(rect.height),
-                 canvasWidth: targetWidth,
-                 canvasHeight: targetHeight,
-                 style: {
-                   margin: 0,
-                   transform: 'none',
-                 },
-                 skipAutoScale: true,
-                 cacheBust: true,
-                 pixelRatio: targetWidth / rect.width,
-                 filter: (node) => {
-                   if (node.classList?.contains('bg-layer')) return false;
-                   if (node.classList?.contains('floating-controls')) return false;
-                   if (node.classList?.contains('no-print')) return false;
-                   return true;
-                 }
-            };
+                    // 4. Capture UI Overlay (Text, Buttons, etc.)
+                    const uiOptions = {
+                        width: Math.ceil(rect.width),
+                        height: Math.ceil(rect.height),
+                        canvasWidth: targetWidth,
+                        canvasHeight: targetHeight,
+                        style: {
+                        margin: 0,
+                        transform: 'none',
+                        },
+                        skipAutoScale: true,
+                        cacheBust: true,
+                        pixelRatio: targetWidth / rect.width,
+                        filter: (node) => {
+                           // Exclude the background image layer entirely from html-to-image
+                           if (node.classList?.contains('bg-layer')) return false;
+                           // Exclude controls
+                           if (node.classList?.contains('floating-controls')) return false;
+                           if (node.classList?.contains('no-print')) return false;
+                           // Exclude any other img tags that might be the background
+                           if (node.tagName === 'IMG' && node.src === image) return false;
+                           return true;
+                        }
+                    };
 
-            let uiBlob = null;
-            try {
-               uiBlob = await toPng(previewRef.current, uiOptions);
-            } catch (err) {
-               console.error("UI Capture failed", err);
-            }
+                    const uiBlob = await toPng(previewRef.current, uiOptions);
+                    
+                    // Show Image Again
+                    setIsHidden(false);
 
-            setIsHidden(false);
+                    // 5. Composite UI onto Canvas
+                    if (uiBlob) {
+                        const uiImg = await loadImage(uiBlob);
+                        ctx.drawImage(uiImg, 0, 0, canvas.width, canvas.height);
+                    }
 
-            // 5. Composite
-            if (uiBlob) {
-                const uiImg = await loadImage(uiBlob);
-                ctx.drawImage(uiImg, 0, 0, canvas.width, canvas.height);
-            }
+                    // 6. Return Result
+                    if (format === 'blob') {
+                        return await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                    } else {
+                        return canvas.toDataURL('image/png');
+                    }
 
-            // 6. Return
-            if (format === 'blob') {
-                return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-            } else {
-                return canvas.toDataURL('image/png');
+                } catch (err) {
+                    console.error(`Attempt ${attempts + 1} failed:`, err);
+                    attempts++;
+                    setIsHidden(false); // Ensure visible on fail
+                    if (attempts >= maxAttempts) throw err;
+                    await new Promise(r => setTimeout(r, 500)); // Wait before retry
+                }
             }
         }
 
@@ -701,7 +718,7 @@
                        ) : (
                          <div 
                             ref={imgContainerRef}
-                            className={`absolute inset-0 overflow-hidden ${isHidden ? 'opacity-0' : 'opacity-100'}`}
+                            className={`absolute inset-0 overflow-hidden ${isHidden ? 'hidden' : 'block'}`}
                             style={{ backgroundColor: theme.bg }}
                          >
                             <img 
@@ -770,7 +787,7 @@
                          </div>
                        </div>
 
-                       <div className="absolute bottom-[32%] left-5 z-20 pointer-events-none">
+                       <div className="absolute bottom-[30%] left-5 z-20 pointer-events-none">
                          <Icons.GoogleLogo />
                        </div>
 
