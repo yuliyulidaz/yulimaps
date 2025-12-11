@@ -137,16 +137,6 @@
             Google Maps
           </span>
         ),
-        ZoomIn: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="white">
-            <path d="M0 0h24v24H0z" fill="none"/><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-          </svg>
-        ),
-        ZoomOut: () => (
-          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="white">
-            <path d="M0 0h24v24H0z" fill="none"/><path d="M19 13H5v-2h14v2z"/>
-          </svg>
-        ),
         BlueCheck: () => (
            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z" fill="#1DA1F2"/>
@@ -165,7 +155,7 @@
       };
 
       // --- Modern Input Component ---
-      const InputField = ({ label, value, onChange, maxLength, placeholder }) => {
+      const InputField = ({ label, value, onChange, onFocus, maxLength, placeholder, inputMode }) => {
         return (
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-gray-500 ml-1">{label}</label>
@@ -173,8 +163,10 @@
               type="text"
               value={value}
               onChange={onChange}
+              onFocus={onFocus}
               maxLength={maxLength}
               placeholder={placeholder}
+              inputMode={inputMode}
               className="w-full h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-gray-900 placeholder-gray-400"
             />
           </div>
@@ -192,8 +184,9 @@
         // --- State Management ---
         const [isLoaded, setIsLoaded] = useState(false);
         const [image, setImage] = useState(null);
-        const [imgScale, setImgScale] = useState(1.0);
-        const [imgPos, setImgPos] = useState({ x: 0, y: 0 });
+        // Removed Zoom State
+        // imgPos is now in PERCENTAGE (0-100)
+        const [imgPos, setImgPos] = useState({ x: 50, y: 50 });
         
         // Form Data
         const [locationName, setLocationName] = useState('');
@@ -221,6 +214,9 @@
         );
 
         useEffect(() => {
+          // Force scroll to top on load
+          window.scrollTo(0, 0);
+
           const loadData = () => {
             try {
               const savedData = localStorage.getItem('googleMapsCardData');
@@ -295,8 +291,7 @@
           if (e.target.files && e.target.files[0]) {
             const resizedImage = await compressImage(e.target.files[0]);
             setImage(resizedImage);
-            setImgScale(1.0);
-            setImgPos({ x: 0, y: 0 });
+            setImgPos({ x: 50, y: 50 }); // Reset to center
           }
         };
 
@@ -322,51 +317,13 @@
           }
         };
 
-        // --- Positioning Logic (Dynamic 3x3 Grid) ---
+        // --- Positioning Logic (3x3 Grid using Percentages) ---
+        // xDir: -1 (Left), 0 (Center), 1 (Right) -> 0%, 50%, 100%
+        // yDir: -1 (Top), 0 (Center), 1 (Bottom) -> 0%, 50%, 100%
         const handleAlign = (xDir, yDir) => {
-            if (!previewRef.current || !image) return;
-
-            const imgEl = previewRef.current.querySelector('img.bg-layer');
-            if (!imgEl || !imgEl.naturalWidth) return;
-
-            const container = previewRef.current;
-            const containerRect = container.getBoundingClientRect();
-            const containerW = containerRect.width;
-            const containerH = containerRect.height;
-
-            const naturalW = imgEl.naturalWidth;
-            const naturalH = imgEl.naturalHeight;
-
-            // Calculate 'cover' scale logic
-            const scaleX = containerW / naturalW;
-            const scaleY = containerH / naturalH;
-            const baseScale = Math.max(scaleX, scaleY);
-
-            // Current rendered dimension
-            const currentW = naturalW * baseScale * imgScale;
-            const currentH = naturalH * baseScale * imgScale;
-
-            // Maximum offset allowed (so edge matches edge)
-            // If rendered size > container, offset is half the difference
-            // If rendered size < container (zoom out), offset is negative (centering happens, but here we align to edge? 
-            // Usually we only align if image is larger. If smaller, align makes it stick to side inside. Logic still holds.)
-            const maxX = (currentW - containerW) / 2;
-            const maxY = (currentH - containerH) / 2;
-
-            // xDir: -1 (Left Button) -> Show Left Side of Image -> Move Image Right -> Positive Offset
-            // xDir: 1 (Right Button) -> Show Right Side of Image -> Move Image Left -> Negative Offset
-            const targetX = xDir * -maxX;
-            const targetY = yDir * -maxY;
-
-            setImgPos({ x: targetX, y: targetY });
-        };
-
-        const handleZoomIn = () => {
-          setImgScale(prev => Math.min(prev + 0.1, 5.0));
-        };
-
-        const handleZoomOut = () => {
-          setImgScale(prev => Math.max(prev - 0.1, 0.1));
+            const percentX = xDir === -1 ? 0 : (xDir === 0 ? 50 : 100);
+            const percentY = yDir === -1 ? 0 : (yDir === 0 ? 50 : 100);
+            setImgPos({ x: percentX, y: percentY });
         };
 
         const loadImage = (src) => {
@@ -407,32 +364,25 @@
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                     // 2. Draw Background Image Manually
-                    // Precise replication of CSS behavior for canvas
                     try {
                         const loadedImg = await loadImage(image);
                         
-                        // Calculate scaling to match CSS 'min-width: 100%; min-height: 100%'
-                        // This logic effectively implements 'object-fit: cover'
+                        // Calculate scaling to match CSS 'object-fit: cover'
                         const scaleX = canvas.width / loadedImg.width;
                         const scaleY = canvas.height / loadedImg.height;
-                        const baseScale = Math.max(scaleX, scaleY);
+                        const scale = Math.max(scaleX, scaleY);
                         
-                        const renderWidth = loadedImg.width * baseScale;
-                        const renderHeight = loadedImg.height * baseScale;
+                        const renderWidth = loadedImg.width * scale;
+                        const renderHeight = loadedImg.height * scale;
                         
-                        // Ratio between visible preview size and actual canvas size
-                        const domToCanvasRatio = canvas.width / rect.width;
+                        // Calculate position based on percentage (imgPos)
+                        // x = 0% -> 0
+                        // x = 50% -> (canvasW - renderW) / 2
+                        // x = 100% -> canvasW - renderW
+                        const drawX = (canvas.width - renderWidth) * (imgPos.x / 100);
+                        const drawY = (canvas.height - renderHeight) * (imgPos.y / 100);
 
-                        ctx.save();
-                        // Move origin to center of canvas
-                        ctx.translate(canvas.width / 2, canvas.height / 2);
-                        // Apply user offset (scaled to canvas size)
-                        ctx.translate(imgPos.x * domToCanvasRatio, imgPos.y * domToCanvasRatio);
-                        // Apply user zoom
-                        ctx.scale(imgScale, imgScale);
-                        // Draw image centered at current origin
-                        ctx.drawImage(loadedImg, -renderWidth / 2, -renderHeight / 2, renderWidth, renderHeight);
-                        ctx.restore();
+                        ctx.drawImage(loadedImg, drawX, drawY, renderWidth, renderHeight);
                         
                     } catch (err) {
                         console.error("Failed to draw background image", err);
@@ -611,6 +561,7 @@
                               type="text"
                               value={locationName}
                               onChange={(e) => setLocationName(e.target.value)}
+                              onFocus={() => setLocationName('')}
                               placeholder="예: 우리집"
                               className="flex-1 h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-gray-900 placeholder-gray-400"
                             />
@@ -673,14 +624,17 @@
                        <InputField 
                          label="리뷰 수" 
                          value={reviewCount} 
-                         onChange={handleReviewCountChange} 
+                         onChange={handleReviewCountChange}
+                         onFocus={() => setReviewCount('')}
                          placeholder=""
+                         inputMode="numeric"
                        />
 
                        <InputField 
                          label="설명 또는 주소" 
                          value={description} 
-                         onChange={(e) => setDescription(e.target.value)} 
+                         onChange={(e) => setDescription(e.target.value)}
+                         onFocus={() => setDescription('')}
                          placeholder=""
                        />
                        
@@ -691,10 +645,12 @@
                                type="text"
                                value={distValue}
                                onChange={handleDistChange}
+                               onFocus={() => setDistValue('')}
+                               inputMode="numeric"
                                placeholder="거리 (숫자)"
                                className="flex-1 h-12 px-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-gray-900 placeholder-gray-400 text-right"
                              />
-                             <div className="relative w-1/3 min-w-[120px]">
+                             <div className="relative w-28 shrink-0">
                                 <select 
                                   value={distUnit} 
                                   onChange={(e) => setDistUnit(e.target.value)}
@@ -750,10 +706,8 @@
                                 width: '100%',
                                 height: '100%',
                                 objectFit: 'cover',
-                                objectPosition: `calc(50% + ${imgPos.x}px) calc(50% + ${imgPos.y}px)`,
-                                transform: `scale(${imgScale})`,
-                                transformOrigin: 'center center',
-                                transition: 'transform 0.1s ease-out'
+                                objectPosition: `${imgPos.x}% ${imgPos.y}%`,
+                                transition: 'object-position 0.2s ease-out'
                               }}
                             />
                          </div>
@@ -762,17 +716,7 @@
                        {/* New 3x3 Grid Controls */}
                        {image && !isHidden && (
                           <div className="floating-controls absolute bottom-[220px] right-3 z-40 animate-fade-in pointer-events-auto flex flex-col gap-2 items-end">
-                             {/* Zoom Controls */}
-                            <div className="bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10 flex flex-col items-center gap-1 shadow-lg w-10">
-                              <button onClick={handleZoomIn} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all">
-                                <Icons.ZoomIn />
-                              </button>
-                              <span className="text-[10px] font-bold text-white text-center">{imgScale.toFixed(1)}</span>
-                              <button onClick={handleZoomOut} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 active:scale-90 transition-all">
-                                <Icons.ZoomOut />
-                              </button>
-                            </div>
-
+                            
                             {/* 3x3 Grid Controls (Replacing D-Pad) */}
                             <div className="bg-black/40 backdrop-blur-md rounded-2xl p-1.5 border border-white/10 shadow-lg grid grid-cols-3 gap-1 w-[100px]">
                                {/* Row 1 */}
